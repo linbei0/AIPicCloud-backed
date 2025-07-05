@@ -1,8 +1,8 @@
 ## 项目简介
 
 AiPicCloud 是一个基于 Spring Boot 的云端图片管理服务系统，提供安全可靠的图片存储、高效的图片搜索分析、多用户权限管理以及分布式数据处理能力。
-!(https://github.com/linbei0/AIPicCloud-backed/blob/master/picture/Home.png)
-!(https://github.com/linbei0/AIPicCloud-backed/blob/master/picture/space.png)
+![主页](https://github.com/linbei0/AIPicCloud-backed/blob/master/picture/Home.png)
+![空间](https://github.com/linbei0/AIPicCloud-backed/blob/master/picture/space.png)
 ### 核心功能
 - 图片上传与管理
 - 用户注册与登录

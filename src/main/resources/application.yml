@@ -15,6 +15,26 @@ spring:
     url: jdbc:mysql://localhost:3306/aipiccloud
     username: root
     password: root
+    # mail
+  mail:
+    host: smtp.126.com
+    username: MossChat@126.com
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          stattls:
+            required: true
+          ssl:
+            enable: true
+          socketFactory:
+            port: 465
+            class: javax.net.ssl.SSLSocketFactory
+    port: 465
+    protocol: smtp
+    default-encoding: UTF-8
   # 开放更大的文件上传体积
   servlet:
     multipart:

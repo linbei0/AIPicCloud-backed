@@ -1,5 +1,7 @@
 package com.aipiccloud.controller;
 
+import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.util.StrUtil;
 import com.aipiccloud.annotation.AuthCheck;
 import com.aipiccloud.common.BaseResponse;
 import com.aipiccloud.common.DeleteRequest;
@@ -8,6 +10,7 @@ import com.aipiccloud.constant.UserConstant;
 import com.aipiccloud.exception.BusinessException;
 import com.aipiccloud.exception.ErrorCode;
 import com.aipiccloud.exception.ThrowUtils;
+import com.aipiccloud.utils.EmailUtils;
 import com.aipiccloud.manager.upload.FilePictureUpload;
 import com.aipiccloud.manager.upload.PictureUploadTemplate;
 import com.aipiccloud.model.dto.file.UploadPictureResult;
@@ -18,11 +21,13 @@ import com.aipiccloud.model.vo.UserVO;
 import com.aipiccloud.service.UserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.time.Duration;
 import java.util.List;
 
 @RestController
@@ -33,6 +38,48 @@ public class UserController {
     private UserService userService;
     @Resource
     private FilePictureUpload filePictureUpload;
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private EmailUtils emailUtils;
+
+    /**
+     * 发送邮箱验证码
+     * 60秒内只能获取一次，有效期为5分钟
+     */
+    @GetMapping("/send-email-code")
+    public BaseResponse<Boolean> sendEmailCode(@RequestParam String email, HttpServletRequest request) {
+        // 参数校验
+        if (StrUtil.isBlank(email)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱不能为空");
+        }
+        if (!email.contains("@")) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "邮箱格式不正确");
+        }
+
+        // 60秒内限制重复发送
+        String lastSendKey = "email_code_last_send:" + email;
+        String lastSendTime = stringRedisTemplate.opsForValue().get(lastSendKey);
+        if (lastSendTime != null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "请勿频繁发送验证码");
+        }
+
+        // 生成6位数字验证码
+        String code = RandomUtil.randomNumbers(6);
+
+        // 存储验证码到Redis（5分钟过期）
+        String codeKey = "email_code:" + email;
+        stringRedisTemplate.opsForValue().set(codeKey, code, Duration.ofMinutes(5));
+
+        // 设置60秒限制标记
+        stringRedisTemplate.opsForValue().set(lastSendKey, "sent", Duration.ofSeconds(60));
+
+        // 发送邮件
+        emailUtils.sendVerificationCode(email, code);
+
+        return ResultUtils.success(true);
+    }
 
     /**
      * 用户注册
@@ -43,7 +90,19 @@ public class UserController {
         String userAccount = userRegisterRequest.getUserAccount();
         String userPassword = userRegisterRequest.getUserPassword();
         String checkPassword = userRegisterRequest.getCheckPassword();
+        String emailCode = userRegisterRequest.getEmailCode();
+        String codeKey = "email_code:" + userAccount;
+        String correctCode = stringRedisTemplate.opsForValue().get(codeKey);
+
+        // 验证验证码
+        if (correctCode == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码已过期或未发送");
+        }
+        if (!correctCode.equals(emailCode)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "验证码错误");
+        }
         long result = userService.userRegister(userAccount, userPassword, checkPassword);
+        stringRedisTemplate.delete(codeKey);
         return ResultUtils.success(result);
     }
 
@@ -216,7 +275,4 @@ public class UserController {
         boolean result = userService.userLogout(request);
         return ResultUtils.success(result);
     }
-
-
 }
-
